@@ -61,4 +61,4 @@ the attribution for my modifications :)
 Adds a centered dot to the screen for easier aiming.
 
 ### Features
-* **Color:** Synchronizes with your crosshair color. 
+* **Color Sync:** Synchronizes with your in-game crosshair's color and crosshair's outline color. 
