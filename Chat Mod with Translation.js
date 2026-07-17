@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ✨ Chat Mod with Translation ✨
 // @namespace    http://tampermonkey.net/
-// @version      2.1
+// @version      1.0
 // @description  Transparent chat styling, real-time contrast-aware text color, and chat/input translation. [-] translate chat log, [=] translate what you are typing, [_] open settings.
 // @author       Lumos (extended)
 // @match        *://narrow.one/*
