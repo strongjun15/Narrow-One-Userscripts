@@ -6,9 +6,9 @@ To run these scripts, Tampermonkey (Google Chrome extension) is needed :
 * or [youtube vedio made by 【/ℕ𝕏/】 𝕶𝖛𝖊𝖝](https://www.youtube.com/watch?v=Cq7HAGtWuQ0)
 
 ## ✨ Chat Mod with Translation ✨
-Real-time translation and adaptive text color features to enhance your gameplay experience !
+Real-time translation and adaptive text color features considering the background to enhance your gameplay experience.
 
-### 🙏 Deepest gratitude and honor to Wolfart..!
+Deepest gratitude and honor to Wolfart..!
 I actually developed this by adding some features on original transparent chat UI mod created by [N1CNmod](https://github.com/N1CNmod/narrowone-mod).
 
 ### ✏️ Features
@@ -42,3 +42,17 @@ Press `_` in-game to access the configuration panel:
 * **My friend's language:** Set this to the language you want your outgoing messages to be translated into.
 * **Adaptive text color:** Toggle the real-time contrast-aware text color engine.
 * **Auto-translate new messages:** When enabled, any new message popping up in the chat log will be automatically translated to your language. (Disabled by default).
+
+### Licensing
+
+This script is based on the work of N1CNmod.
+
+The original source code remains the intellectual property of its original author.
+All original copyright notices and attributions have been preserved.
+
+The MIT License included in this repository applies only to the original code,
+modifications, and additions created by Strong Jun. It does not replace,
+override, or relicense any portion of the original author's work.
+
+If you reuse this repository, please preserve both the original attribution and
+the attribution for my modifications.
