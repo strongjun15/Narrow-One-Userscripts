@@ -1,4 +1,4 @@
-# Scripts for Narrow One !
+# Scripts for Narrow One 🏹
 > This repository contains JS scripts developed by Lumos ✌️ to make playing Narrow One more fun and convenient.
 
 To run these scripts, Tampermonkey (Google Chrome extension) is needed :
