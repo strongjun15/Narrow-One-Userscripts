@@ -5,7 +5,7 @@ To run these scripts, Tampermonkey (Google Chrome extension) is needed :
 * have a look at this [guidline by N1CN](https://github.com/N1CNmod/narrowone-mod#how-to-run-the-scripts-step-by-step-guide)
 * or [youtube vedio made by 【/ℕ𝕏/】 𝕶𝖛𝖊𝖝](https://www.youtube.com/watch?v=Cq7HAGtWuQ0)
 
-## 📄 Chat Mod with Translation
+## 📚 Chat Mod with Translation
 Real-time translation and adaptive text color features considering the background to enhance your gameplay experience.
 
 Deepest gratitude and honor to [Wolfart](https://github.com/N1-wolfart)..! I developed this by adding some features on original transparent chat UI mod created by [N1CNmod](https://github.com/N1CNmod/narrowone-mod).
@@ -56,7 +56,7 @@ override, or relicense any portion of the original author's work.
 If you reuse this repository, please preserve both the original attribution and
 the attribution for my modifications :)
 
-## 📄 Adaptive Center Dot
+## 📚 Adaptive Center Dot
 Adds a centered dot to the screen for easier aiming.
 
 ### Features
