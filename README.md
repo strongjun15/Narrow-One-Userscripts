@@ -27,13 +27,13 @@ Deepest gratitude and honor to [Wolfart](https://github.com/N1-wolfart)..! 🙏�
 
 | Shortcut | Action | Description |
 |---|---|---|
-| `_`  (Shift + `-`) | Open/Close Settings Menu | Opens the **✨ Chat Translator ✨** panel. Press again to close it. |
+| `_`  (Shift + `-`) | Open/Close Settings Menu | Opens the **Chat Translator** panel. Press again to close it. |
 | `\` (When not typing) | Translate Chat Log | Press outside the chat input box to instantly translate all currently visible chat messages into your language. Press again to revert to the original messages. (Note : if you are unfamiliar with this shortcut key, don't you worry! `-` from v1.0 still works.) |
 | `\`   (When typing) | Translate Your Input | While typing a message in the chat input box, press this to instantly translate your typed text into your designated "Friend's Language." |
 
 ### Settings Menu Overview
 
-Press `_` in-game to access the configuration panel:
+Press `_` or clikc 'CHAT TRANSLATION' to access the configuration panel:
 
 | Setting | Description |
 |---|---|
