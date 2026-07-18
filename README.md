@@ -72,4 +72,9 @@ the attribution for my modifications :)
 Adds a centered dot to the screen for easier aiming.
 
 ### Features
-* **Color Sync:** Synchronizes with your in-game crosshair's color and crosshair's outline color. 
+* **Color Sync:** Synchronizes with your in-game crosshair's color and crosshair's outline color.
+
+### How to Use
+
+Click the file named **Chat Mod with Translation**, download it, and upload it on Tampermonkey.
+Or you can just copy the script, create a new file in Tampermonkey by clicking `+`, and pasting it.
