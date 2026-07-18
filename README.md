@@ -25,6 +25,9 @@ Deepest gratitude and honor to [Wolfart](https://github.com/N1-wolfart)..! ğŸ™ğ
 
 ### How to Use (Keybinds)
 
+Click the file named **Chat Mod with Translation**, download it, and upload it on Tampermonkey.
+Or you can just copy the script, create a new file in Tampermonkey by clicking `+`, and pasting it.
+
 | Shortcut | Action | Description |
 |---|---|---|
 | `_`  | Open/Close Settings Menu | Opens the **Chat Translator** panel. Press again to close it. |
