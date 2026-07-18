@@ -27,12 +27,9 @@ Deepest gratitude and honor to [Wolfart](https://github.com/N1-wolfart)..! 🙏�
 
 | Shortcut | Action | Description |
 |---|---|---|
-| `_` 
-(Shift + `-`) | Open/Close Settings Menu | Opens the **✨ Chat Translator ✨** panel. Press again to close it. |
-| `-` 
-(Minus) | Translate Chat Log | Press outside the chat input box to instantly translate all currently visible chat messages into your language. Press again to revert to the original messages. |
-| `=` 
-(Equals) | Translate Your Input | While typing a message in the chat input box, press this to instantly translate your typed text into your designated "Friend's Language." |
+| `_`  (Shift + `-`) | Open/Close Settings Menu | Opens the **✨ Chat Translator ✨** panel. Press again to close it. |
+| `-`  (Minus) | Translate Chat Log | Press outside the chat input box to instantly translate all currently visible chat messages into your language. Press again to revert to the original messages. |
+| `=`   (Equals) | Translate Your Input | While typing a message in the chat input box, press this to instantly translate your typed text into your designated "Friend's Language." |
 
 ### Settings Menu Overview
 
