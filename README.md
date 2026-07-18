@@ -49,6 +49,7 @@ Press `_` or click 'CHAT TRANSLATION' to access the configuration panel:
 
 * **Chat Mod with Translation v1.0 :**
   * The first version. Added adaptive text color and translation feature on original chat mod made by Wolfart.
+
 * **Chat Mod with Translation v1.1 :**
   * Modified Settings Medu's UI  just like other Menu's (Settigns, Shop, Squad, etc) in Narrow One
   * Modified shortcut keys (You can know translate others' messages and the message you are typing with just one shortcut key `\`)
