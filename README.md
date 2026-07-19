@@ -13,6 +13,8 @@ Real-time translation and adaptive text color features considering the backgroun
 
 Deepest gratitude and honor to [Wolfart](https://github.com/N1-wolfart). I developed this by adding some features on original transparent chat UI mod created by [N1CNmod](https://github.com/N1CNmod/narrowone-mod) :)
 
+I express gratitude to [vyrin](https://github.com/n1vyrin) as well who helped develope more polished code.
+
 ### Features
 
 * Transparent Chat UI (Original): Replaces the bulky default chat box with a clean, transparent, and non-intrusive interface.
