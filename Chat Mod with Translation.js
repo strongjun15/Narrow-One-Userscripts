@@ -345,6 +345,15 @@ body.n1ct-fallback ${SEL_INPUT} {
   font-family: sans-serif; font-size: 15px; outline: none; user-select: text;
   opacity: .9;
 }
+/* 검색창 placeholder를 회색으로 표시 (원본 mod의 input::placeholder { visibility:hidden } 을 여기서만 되돌림) */
+#n1ct-menu input.n1ct-search::placeholder {
+  visibility: visible !important;
+  color: currentColor !important;
+  opacity: .45 !important;
+  font-family: sans-serif !important;
+  font-size: 15px !important;
+  text-transform: none !important;
+}
 #n1ct-menu input.n1ct-search:focus { opacity: 1; }
 #n1ct-menu .n1ct-current {
   margin-top: 4px; font-family: sans-serif; font-size: 13px;
@@ -814,14 +823,14 @@ body.n1ct-fallback ${SEL_INPUT} {
 
       <h3 class="settings-group-header">My language</h3>
       <div class="n1ct-field" data-which="myLang">
-        <input class="n1ct-search" type="text" placeholder="Search language or country" spellcheck="false">
+        <input class="n1ct-search" type="text" placeholder="Search a language or country..." spellcheck="false">
         <div class="n1ct-results"></div>
         <div class="n1ct-current"></div>
       </div>
 
       <h3 class="settings-group-header">My friend's language</h3>
       <div class="n1ct-field" data-which="friendLang">
-        <input class="n1ct-search" type="text" placeholder="Search language or country" spellcheck="false">
+        <input class="n1ct-search" type="text" placeholder="Search a language or country..." spellcheck="false">
         <div class="n1ct-results"></div>
         <div class="n1ct-current"></div>
       </div>
@@ -1020,8 +1029,5 @@ body.n1ct-fallback ${SEL_INPUT} {
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
     else boot();
 })();
-
-
-
 
 
