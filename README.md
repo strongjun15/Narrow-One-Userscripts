@@ -45,6 +45,8 @@ Press `_` or click 'CHAT TRANSLATION' to access the configuration panel:
 | **Adaptive text color** | Toggle the real-time contrast-aware text color engine. |
 | **Auto-translate new messages** | When enabled, any new message popping up in the chat log will be automatically translated to your language. (Disabled by default). |
 
+⚠️ Clicking the panel shows the frequently used languages, but searching reveals many more.
+
 ### Changelog
 
 * **Chat Mod with Translation v1.0 :**
@@ -53,7 +55,7 @@ Press `_` or click 'CHAT TRANSLATION' to access the configuration panel:
 * **Chat Mod with Translation v1.1 :**
   * Modified Settings Medu's UI  just like other Menu's (Settigns, Shop, Squad, etc) in Narrow One
   * Modified shortcut keys (You can know translate others' messages and the message you are typing with just one shortcut key `\`)
-  * Fixed minor bugs related to Google Translator
+  * Fixed minor bugs
 
 ### Additional Licensing
 
