@@ -60,6 +60,12 @@ Press `_` or click 'CHAT TRANSLATION' to access the configuration panel:
   * Added a dashboard icon (`@icon`) to the userscript metadata block for easier identification in Tampermonkey/Violentmonkey
   * Fixed minor bugs
 
+ * **Chat Mod with Translation v2.0 :**
+   * **Backup translation engine (Microsoft)** — translations now try Google and Microsoft at the same time and use whichever comes back first. If one service is slow or temporarily down, you won't notice — it just falls back to the other.
+   * **Player name translation** — you can now translate player names too, not just chat messages (off by default, turn it on in settings).
+   * **"What language is this?" tags** — translated messages now show what language they were originally written in, but only when it's different from the last one shown. This keeps short spammy chat (`uh`, `bruh`, `thx`) from getting cluttered with a tag on every single line, while still making sure you're never left wondering what language is currently being spoken, even if the last tagged message already scrolled away.
+   * Slightly reduced how often the mod checks chat background color for text contrast, for a small performance improvement with no visible difference in how fast colors adapt.
+   
 ### Additional Licensing
 
 This script is based on the work of N1CNmod.
