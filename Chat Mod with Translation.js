@@ -1,25 +1,27 @@
 // ==UserScript==
-// @name         Chat Mod with Translation
+// @name         Chat Mod with Translation v2.0
 // @namespace    http://tampermonkey.net/
-// @version      1.1
-// @description  Transparent chat styling, real-time contrast-aware text color, and chat/input translation. [-] translate chat log, [=] translate what you are typing, [_] or the CHAT TRANSLATION menu button to open settings.
-// @author       Lumos (extended)
+// @version      2.0
+// @description  Transparent chat styling, real-time contrast-aware text color, and chat/input translation. Dual-engine (Google + Microsoft) racing, player-name translation, and a language-change indicator. [\] translate, [_] settings.
+// @author       Lumos & vyrin
 // @match        *://narrow.one/*
-// @icon         https://www.svgrepo.com/show/375775/chat.svg
 // @run-at       document-start
 // @grant        GM_xmlhttpRequest
 // @grant        unsafeWindow
 // @connect      translate.googleapis.com
+// @connect      api-edge.cognitive.microsofttranslator.com
+// @connect      edge.microsoft.com
+// @icon         data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%234a90d9'%3E%3Cpath d='M12 3C6.5 3 2 6.6 2 11c0 2.2 1.1 4.2 3 5.6V21l4.1-2.3c.9.2 1.9.3 2.9.3 5.5 0 10-3.6 10-8s-4.5-8-10-8z'/%3E%3C/svg%3E
 // ==/UserScript==
 
 /*
-Originally by N1CNmod.
-Added translation and adaptive text color features by Lumos.
+Originally by N1CNmod. Translation & adaptive-color features by Lumos.
+v2.0: dual-engine racing (Google + Microsoft), player-name translation,
+      and a "language changed" indicator — engine work by vyrin, integrated & trimmed.
 
-Credit to N1CNmod for the amazing original UI code! (https://github.com/N1CNmod/narrowone-mod)
-This is a modified version extended by Lumos, adding auto-translation & adaptive color features.
+Credit to N1CNmod for the original UI code! (https://github.com/N1CNmod/narrowone-mod)
 Shared with love for the Narrow.One community :)
- */
+*/
 
 /* eslint-disable no-console */
 (function () {
@@ -27,37 +29,37 @@ Shared with love for the Narrow.One community :)
 
     const TAG = '[N1CT]';
     const PW = (typeof unsafeWindow !== 'undefined' && unsafeWindow) || window;
+    const VERSION = '2.0';
 
     /* ============================================================
      * ★ 사용자 설정 구역 ★
-     * "Translating…" 라벨의 기본 위치. 게임 안에서 [_] → "Place label" 버튼으로
-     * 드래그해서 옮기면 자동 저장되므로, 보통은 여기를 건드릴 필요 없음.
+     * "Translating…" 라벨의 기본 위치.
      * ============================================================ */
     const INDICATOR_DEFAULT = {
         left: '50%',    // 가로: 화면 중앙
-        bottom: '13%',  // 세로: 화면 아래에서 13% (체력바가 뜨는 높이 근처)
+        bottom: '13%',  // 세로: 화면 아래에서 13%
         fontSize: '17px'
     };
 
     /* ============================================================
-     * DOM 셀렉터 (2026-07 narrow.one 실측 구조)
+     * DOM 셀렉터 (narrow.one 실측 구조)
      *   .chat-log-container
      *     └ .chat-message-container
-     *         ├ .player-avatar
      *         └ .chat-message-content
      *             ├ h3.chat-message-name   ← 닉네임
-     *             └ div                    ← 메시지 본문 (한 줄에 하나, 여러 개 가능)
+     *             └ div                    ← 메시지 본문
      * ============================================================ */
     const SEL_LOG = '.chat-log-container';
     const SEL_MSG = '.chat-message-container';
     const SEL_BODY = '.chat-message-content';
-    const SEL_LINE = '.chat-message-content > div';           // 번역 대상 = 본문 줄만
+    const SEL_LINE = '.chat-message-content > div';
     const SEL_NAME = '.chat-message-content > h3.chat-message-name';
     const SEL_INPUT = 'input.chat-input';
-    const SEL_TEXT = SEL_LINE + ', ' + SEL_NAME + ', ' + SEL_INPUT; // 색상 적용 대상
+    const SEL_TEXT = SEL_LINE + ', ' + SEL_NAME + ', ' + SEL_INPUT; // 적응형 색상 대상
 
     /* ============================================================
      * 0. WebGL canvas patch (게임이 컨텍스트를 만들기 전에 실행되어야 함)
+     *    적응형 색상이 배경 픽셀을 읽으려면 preserveDrawingBuffer 필요.
      * ============================================================ */
     (function patchCanvas() {
         try {
@@ -80,13 +82,15 @@ Shared with love for the Narrow.One community :)
     /* ============================================================
      * 1. Config
      * ============================================================ */
-    const CFG_KEY = 'n1ct_config_v1';
+    const CFG_KEY = 'n1ct_config_v2';
     const DEFAULTS = {
         myLang: (navigator.language || 'en').split('-')[0],
         friendLang: 'en',
         adaptive: true,
-        autoTranslate: false,   // 수정됨: 기본적으로 꺼져 있게 설정
-        indicator: null        // {x, y} 뷰포트 비율. null이면 INDICATOR_DEFAULT 사용
+        autoTranslate: false,   // 기본 꺼짐
+        translateNames: false,  // 닉네임 번역 (친구 기능, opt-in)
+        showLangChange: true,   // 감지 언어가 바뀔 때만 언어 표시 (신규 규칙)
+        indicator: null         // {x,y} 뷰포트 비율. null이면 기본 위치
     };
     let cfg = Object.assign({}, DEFAULTS);
     try { Object.assign(cfg, JSON.parse(localStorage.getItem(CFG_KEY) || '{}')); } catch (e) { /* ignore */ }
@@ -213,7 +217,129 @@ Shared with love for the Narrow.One community :)
     }
 
     /* ============================================================
-     * 3. Styles
+     * 3. Translation backend — Google + Microsoft 병렬 경쟁 (racing)
+     *    두 엔진에 동시에 요청 → 먼저 "성공"한 응답을 채택.
+     *    한쪽이 다운되어도 사용자는 못 느낌 (가용성 확보).
+     * ============================================================ */
+    const cache = new Map();
+
+    // 공통 요청 헬퍼 (GET/POST, anonymous=쿠키 미포함으로 프라이버시 보호)
+    function gmRequest(url, opts = {}) {
+        return new Promise((resolve, reject) => {
+            GM_xmlhttpRequest({
+                method: opts.method || 'GET',
+                url,
+                headers: opts.headers || {},
+                data: opts.data || undefined,
+                timeout: opts.timeout || 8000,
+                anonymous: true,
+                onload: r => (r.status >= 200 && r.status < 300)
+                    ? resolve(r.responseText)
+                    : reject(new Error('HTTP ' + r.status)),
+                onerror: () => reject(new Error('network error')),
+                ontimeout: () => reject(new Error('timeout'))
+            });
+        });
+    }
+
+    // --- 엔진 A: Google gtx (API 키 불필요, 요청 1회) ---
+    async function translateGoogle(text, target) {
+        const url = 'https://translate.googleapis.com/translate_a/single'
+            + '?client=gtx&sl=auto&tl=' + encodeURIComponent(target)
+            + '&dt=t&q=' + encodeURIComponent(text);
+        const raw = await gmRequest(url, { timeout: 6000 });
+        const data = JSON.parse(raw);
+        const out = (data[0] || []).map(s => (s && s[0]) ? s[0] : '').join('');
+        return { text: out || text, detected: data[2] || 'auto' };
+    }
+
+    // --- 엔진 B: Microsoft (Edge/Bing 무료 엔드포인트, 토큰 필요) ---
+    // 주의: 비공식 엔드포인트라 MS가 막으면 이 엔진만 실패한다.
+    //       그래도 racing 덕분에 Google이 받아주므로 전체 번역은 계속 동작함.
+    const MS_LANG_MAP = { 'zh-CN': 'zh-Hans', 'zh-TW': 'zh-Hant', 'tl': 'fil', 'jw': 'jv', 'no': 'nb' };
+    const MS_LANG_REVERSE = { 'zh-Hans': 'zh-CN', 'zh-Hant': 'zh-TW', 'fil': 'tl', 'jv': 'jw', 'nb': 'no' };
+    const toMicrosoftLang = c => MS_LANG_MAP[c] || c;
+    const fromMicrosoftLang = c => MS_LANG_REVERSE[c] || c;
+
+    const MS_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36 Edg/125.0.0.0';
+    let msToken = null, msTokenExpiry = 0;
+
+    async function getMicrosoftToken() {
+        const now = Date.now();
+        if (msToken && now < msTokenExpiry) return msToken;  // 8분 캐싱된 토큰 재사용
+        const token = await gmRequest('https://edge.microsoft.com/translate/auth', {
+            method: 'GET',
+            headers: { 'User-Agent': MS_UA, 'Origin': 'https://www.bing.com', 'Referer': 'https://www.bing.com/' },
+            timeout: 6000
+        });
+        if (!token || token.length < 20) throw new Error('Microsoft: bad token');
+        msToken = token;
+        msTokenExpiry = now + 8 * 60 * 1000;  // 토큰 유효(~10분)보다 짧게 잡아 안전 마진
+        return msToken;
+    }
+
+    async function translateMicrosoft(text, target) {
+        const msTarget = toMicrosoftLang(target);
+        const token = await getMicrosoftToken();
+        const url = 'https://api-edge.cognitive.microsofttranslator.com/translate'
+            + '?api-version=3.0&to=' + encodeURIComponent(msTarget);
+        const raw = await gmRequest(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + token,
+                'User-Agent': MS_UA,
+                'Origin': 'https://www.bing.com',
+                'Referer': 'https://www.bing.com/'
+            },
+            data: JSON.stringify([{ Text: text }]),
+            timeout: 6000
+        });
+        const data = JSON.parse(raw);
+        if (!Array.isArray(data) || !data[0]) throw new Error('Microsoft: empty response');
+        const item = data[0];
+        const translated = (item.translations && item.translations[0]) ? item.translations[0].text : text;
+        const detected = (item.detectedLanguage && item.detectedLanguage.language)
+            ? fromMicrosoftLang(item.detectedLanguage.language) : 'auto';
+        return { text: translated, detected };
+    }
+
+    // Promise.any 폴리필 (구형 브라우저 대응): 하나라도 성공하면 즉시 반환, 전부 실패해야 reject
+    function promiseAny(promises) {
+        if (typeof Promise.any === 'function') return Promise.any(promises);
+        return new Promise((resolve, reject) => {
+            const errors = []; let count = 0;
+            for (const p of promises) {
+                Promise.resolve(p).then(resolve).catch(e => {
+                    errors.push(e);
+                    if (++count === promises.length) reject(new Error('all engines failed'));
+                });
+            }
+        });
+    }
+
+    async function translateText(text, target) {
+        const key = target + '\u0000' + text;
+        if (cache.has(key)) return cache.get(key);
+        const result = await promiseAny([
+            translateGoogle(text, target),
+            translateMicrosoft(text, target)
+        ]);
+        cache.set(key, result);
+        if (cache.size > 600) cache.delete(cache.keys().next().value);
+        return result;
+    }
+
+    // 동시 요청 수 제한 (슬라이딩 윈도우): 한 번에 최대 limit개만 처리
+    async function mapLimit(items, limit, fn) {
+        let i = 0;
+        await Promise.all(new Array(Math.min(limit, items.length)).fill(0).map(async () => {
+            while (i < items.length) { const idx = i++; await fn(items[idx], idx); }
+        }));
+    }
+
+    /* ============================================================
+     * 4. Styles  (★ 채팅 UI·라벨·설정창·아이콘 모두 원본 디자인 그대로 ★)
      * ============================================================ */
     function applyStyles() {
         const style = document.createElement('style');
@@ -265,7 +391,16 @@ body.n1ct-fallback ${SEL_INPUT} {
   text-shadow: 0 0 4px #000, 0 0 8px #000, 1px 1px 0 #000 !important;
 }
 
-/* ---------- "Translating…" 라벨 ---------- */
+/* ---------- 언어 변경 배지 (신규) : 채팅 톤에 맞춰 원본 폰트 사용 ---------- */
+.n1ct-langbadge {
+  display: inline-block; margin-left: 8px;
+  font-family: Ubuntu, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 11pt; opacity: .6; vertical-align: baseline; cursor: help;
+  color: #ffffff;
+  text-shadow: 0 0 3px rgba(0,0,0,.95), 0 0 6px rgba(0,0,0,.7);
+}
+
+/* ---------- "Translating…" 라벨 (원본 디자인) ---------- */
 #n1ct-indicator {
   position: fixed;
   z-index: 999998;
@@ -285,27 +420,16 @@ body.n1ct-fallback ${SEL_INPUT} {
   box-shadow: 0 4px 14px rgba(0,0,0,.35);
 }
 #n1ct-indicator.err { background: rgba(150,20,20,.75); }
-#n1ct-indicator.placing {
-  pointer-events: auto; cursor: grab;
-  background: rgba(20,90,160,.8);
-  outline: 2px dashed rgba(255,255,255,.7); outline-offset: 3px;
-}
-#n1ct-indicator.placing:active { cursor: grabbing; }
 #n1ct-indicator .dots::after { content: ''; animation: n1ct-dots 1.2s steps(4, end) infinite; }
 @keyframes n1ct-dots {
   0% { content: ''; } 25% { content: '.'; } 50% { content: '..'; }
   75% { content: '...'; } 100% { content: '...'; }
 }
 
-/* ---------- 설정 창 (게임 네이티브 종이 패널 스타일) ----------
-   게임의 .dialog.wrinkledPaper / .dialogCurtain 클래스를 그대로 재사용하므로
-   종이 질감·배경색·테마(라이트/다크/스크립트 커스텀)는 게임이 알아서 처리함.
-   여기서는 게임에 없는 우리 전용 요소(언어 검색 드롭다운, 토글 등)만 최소로 스타일링. */
-
-/* 커튼(뒷배경)과 패널은 게임 클래스에 의존하되, 위치/전환만 우리가 지정 */
+/* ---------- 설정 창 (게임 네이티브 종이 패널 스타일 재사용, 원본 디자인) ---------- */
 #n1ct-curtain {
   position: fixed; inset: 0; z-index: 99998;
-  /* .dialogCurtain 클래스가 배경/전환을 처리. 아래는 fallback */
+  transition: opacity .2s ease, visibility .2s ease;
 }
 #n1ct-menu {
   position: fixed; top: 50%; left: 50%;
@@ -313,30 +437,21 @@ body.n1ct-fallback ${SEL_INPUT} {
   width: 480px; max-width: calc(100% - 20px);
   box-sizing: border-box; padding: 30px;
   z-index: 99999;
-  /* 게임과 동일한 등장/퇴장 전환 (살짝 튕기는 이징) */
   transition: transform .2s cubic-bezier(0.3,-0.8,0.7,1.8),
               opacity .2s cubic-bezier(0.3,-0.8,0.7,1.8),
               visibility .2s cubic-bezier(0.3,-0.8,0.7,1.8);
   max-height: calc(100vh - 40px); overflow-y: auto;
 }
-/* 닫힘 상태: 게임의 .hidden 과 같은 효과 (줄어들며 사라짐) */
 #n1ct-menu.n1ct-hidden {
   transform: translate(-50%, -50%) scale(.6);
   opacity: 0; visibility: hidden; pointer-events: none;
 }
 #n1ct-curtain.n1ct-hidden { opacity: 0; visibility: hidden; pointer-events: none; }
-#n1ct-curtain {
-  transition: opacity .2s ease, visibility .2s ease;
-}
 
-/* 제목: 게임 .dialogTitle.blueNight 를 그대로 씀 → 폰트/색/lowercase 자동 */
 #n1ct-menu .dialogTitle { margin: 0 0 20px; }
-
-/* 소제목: 게임 .settings-group-header 재사용. 본문 라벨: .settings-item-text 재사용 */
 #n1ct-menu .settings-group-header { margin: 18px 0 10px; }
 #n1ct-menu .settings-group-header:first-of-type { margin-top: 0; }
 
-/* 언어 필드 */
 #n1ct-menu .n1ct-field { position: relative; margin: 0 0 6px; }
 #n1ct-menu input.n1ct-search {
   width: 100%; box-sizing: border-box; height: 34px;
@@ -346,7 +461,6 @@ body.n1ct-fallback ${SEL_INPUT} {
   font-family: sans-serif; font-size: 15px; outline: none; user-select: text;
   opacity: .9;
 }
-/* 검색창 placeholder를 회색으로 표시 (원본 mod의 input::placeholder { visibility:hidden } 을 여기서만 되돌림) */
 #n1ct-menu input.n1ct-search::placeholder {
   visibility: visible !important;
   color: currentColor !important;
@@ -360,8 +474,6 @@ body.n1ct-fallback ${SEL_INPUT} {
   margin-top: 4px; font-family: sans-serif; font-size: 13px;
   font-weight: 700; opacity: .75;
 }
-/* 검색 결과 드롭다운: 배경이 필요해서 게임 UI 배경색 변수를 빌려 씀
-   (--default-ui-bg-color 는 게임/스크립트가 정의하는 테마 배경색) */
 #n1ct-menu .n1ct-results {
   position: absolute; left: 0; right: 0; top: 100%;
   margin-top: 2px;
@@ -378,14 +490,12 @@ body.n1ct-fallback ${SEL_INPUT} {
 #n1ct-menu .n1ct-results div:hover { background: rgba(128,128,128,.2); }
 #n1ct-menu .n1ct-results span.code { opacity: .55; font-size: 12px; }
 
-/* 토글 행: 게임 .settings-item-text 로 라벨을 쓰고 체크박스만 배치 */
 #n1ct-menu .n1ct-toggle {
   display: flex; align-items: center; justify-content: space-between;
   padding: 8px 0; font-family: sans-serif; font-size: 16px;
 }
 #n1ct-menu .n1ct-toggle input { width: 18px; height: 18px; cursor: pointer; accent-color: currentColor; }
 
-/* 단축키 안내 */
 #n1ct-menu .n1ct-keys {
   margin-top: 6px; font-family: sans-serif; font-size: 13px;
   line-height: 1.9; opacity: .7;
@@ -395,13 +505,12 @@ body.n1ct-fallback ${SEL_INPUT} {
   border-radius: 4px; padding: 0 5px; font-family: sans-serif; font-weight: 700;
 }
 
-/* 하단 닫기 버튼 영역: 게임 .dialogButtonsContainer / .dialog-button 재사용 */
 #n1ct-menu .dialogButtonsContainer {
   display: flex; justify-content: center; margin-top: 22px;
 }
 #n1ct-menu .dialog-button { cursor: pointer; }
 
-/* 왼쪽 메뉴에 넣는 CHAT TRANSLATION 버튼 아이콘 */
+/* 왼쪽 메뉴에 넣는 CHAT TRANSLATION 버튼 아이콘 (원본) */
 #n1ct-menu-btn .buttonImage {
   background-image: var(--n1ct-icon) !important;
   background-size: 66% !important;
@@ -413,7 +522,7 @@ body.n1ct-fallback ${SEL_INPUT} {
     }
 
     /* ============================================================
-     * 4. Adaptive color engine
+     * 5. Adaptive color engine  (★ 샘플링 간격 300ms ★)
      * ============================================================ */
     const SAMPLE = 12;
     let sampler = null, sctx = null;
@@ -430,7 +539,7 @@ body.n1ct-fallback ${SEL_INPUT} {
         } catch (e) { return false; }
     }
 
-    // 캔버스가 2개(main-canvas ×2)라서 화면에 보이는 쪽과 픽셀이 읽히는 쪽이 다를 수 있음
+    // 캔버스가 2개라서 화면에 보이는 쪽과 픽셀이 읽히는 쪽이 다를 수 있음
     function probeReadable(cv) {
         if (!cv || !cv.width || !cv.height || !ensureSampler()) return false;
         try {
@@ -445,13 +554,13 @@ body.n1ct-fallback ${SEL_INPUT} {
     function resolveCanvases() {
         const now = performance.now();
         const ok = displayCanvas && displayCanvas.isConnected && displayCanvas.clientWidth > 0
-                && pixelCanvas && pixelCanvas.isConnected;
+            && pixelCanvas && pixelCanvas.isConnected;
         if (ok && now - lastResolve < 3000) return;
         lastResolve = now;
 
         const all = Array.prototype.slice.call(document.querySelectorAll('canvas'));
         const visible = all.filter(c => c.clientWidth > 0 && c.clientHeight > 0)
-                           .sort((a, b) => (b.clientWidth * b.clientHeight) - (a.clientWidth * a.clientHeight));
+            .sort((a, b) => (b.clientWidth * b.clientHeight) - (a.clientWidth * a.clientHeight));
         displayCanvas = visible[0] || null;
         if (!displayCanvas) { pixelCanvas = null; return; }
 
@@ -530,50 +639,12 @@ body.n1ct-fallback ${SEL_INPUT} {
             if (fallbackMode) { fallbackMode = false; document.body.classList.remove('n1ct-fallback'); }
         }
     }
-    setInterval(adaptiveTick, 120);
+    setInterval(adaptiveTick, 300);   // ★ 120ms → 300ms
 
     /* ============================================================
-     * 5. Translation backend (Google gtx, API 키 불필요)
+     * 6. "Translating…" 라벨 (원본 디자인, 드래그 배치 코드는 제거)
      * ============================================================ */
-    const cache = new Map();
-
-    function gmGet(url) {
-        return new Promise((resolve, reject) => {
-            GM_xmlhttpRequest({
-                method: 'GET', url, timeout: 15000,
-                onload: r => (r.status >= 200 && r.status < 300) ? resolve(r.responseText) : reject(new Error('HTTP ' + r.status)),
-                onerror: () => reject(new Error('network error')),
-                ontimeout: () => reject(new Error('timeout'))
-            });
-        });
-    }
-
-    async function translateText(text, target) {
-        const key = target + '\u0000' + text;
-        if (cache.has(key)) return cache.get(key);
-        const url = 'https://translate.googleapis.com/translate_a/single'
-            + '?client=gtx&sl=auto&tl=' + encodeURIComponent(target)
-            + '&dt=t&q=' + encodeURIComponent(text);
-        const raw = await gmGet(url);
-        const data = JSON.parse(raw);
-        const out = (data[0] || []).map(s => (s && s[0]) ? s[0] : '').join('');
-        const res = { text: out || text, detected: data[2] || 'auto' };
-        cache.set(key, res);
-        if (cache.size > 500) cache.delete(cache.keys().next().value);
-        return res;
-    }
-
-    async function mapLimit(items, limit, fn) {
-        let i = 0;
-        await Promise.all(new Array(Math.min(limit, items.length)).fill(0).map(async () => {
-            while (i < items.length) { const idx = i++; await fn(items[idx], idx); }
-        }));
-    }
-
-    /* ============================================================
-     * 6. "Translating…" 라벨
-     * ============================================================ */
-    let ind = null, placing = false;
+    let ind = null;
 
     function ensureIndicator() {
         if (ind && ind.isConnected) return ind;
@@ -581,18 +652,6 @@ body.n1ct-fallback ${SEL_INPUT} {
         ind.id = 'n1ct-indicator';
         ind.innerHTML = '<span class="txt">Translating</span><span class="dots"></span>';
         document.body.appendChild(ind);
-
-        // 배치 모드 드래그
-        let drag = false;
-        ind.addEventListener('mousedown', (e) => { if (placing) { drag = true; e.preventDefault(); } });
-        document.addEventListener('mouseup', () => {
-            if (drag) { drag = false; saveCfg(); }
-        });
-        document.addEventListener('mousemove', (e) => {
-            if (!drag) return;
-            cfg.indicator = { x: e.clientX / window.innerWidth, y: e.clientY / window.innerHeight };
-            positionIndicator();
-        });
         return ind;
     }
 
@@ -620,57 +679,81 @@ body.n1ct-fallback ${SEL_INPUT} {
         clearTimeout(indTimer);
         if (isError) indTimer = setTimeout(hideIndicator, 2500);
     }
-    function hideIndicator() { if (ind && !placing) ind.style.display = 'none'; }
+    function hideIndicator() { if (ind) ind.style.display = 'none'; }
     window.addEventListener('resize', positionIndicator);
 
-    function setPlacing(on) {
-        placing = on;
-        const el = ensureIndicator();
-        el.classList.toggle('placing', on);
-        if (on) {
-            el.querySelector('.txt').textContent = 'Drag me here';
-            el.querySelector('.dots').style.display = 'none';
-            el.classList.remove('err');
-            positionIndicator();
-            el.style.display = 'block';
-        } else {
-            el.style.display = 'none';
-            saveCfg();
-        }
-    }
-
     /* ============================================================
-     * 7. 채팅 로그 번역 ( '-' )
+     * 7. 채팅 로그 번역  ( '\' 또는 '-' )
      * ============================================================ */
     let busy = false;
-    const origMap = new WeakMap(); // el -> original text
+    const origMap = new WeakMap();     // el -> 원문 텍스트
+    let lastDetectedLang = null;       // 최근 감지된 언어(base code)
+    let lastBadgeEl = null;            // 그 언어를 마지막으로 표시했던 메시지의 부모 요소 (소멸 여부 추적용)
 
     const chatLines = () => Array.prototype.slice.call(document.querySelectorAll(SEL_LINE));
+    const chatNames = () => Array.prototype.slice.call(document.querySelectorAll(SEL_NAME));
 
     function restoreAll() {
-        for (const el of chatLines()) {
+        for (const el of [...chatLines(), ...chatNames()]) {
             if (origMap.has(el)) {
                 el.textContent = origMap.get(el);
                 origMap.delete(el);
                 el.removeAttribute('title');
             }
         }
+        // 언어 배지 전부 제거 + 추적 상태 초기화 (다음 번역 때 첫 언어부터 다시 표시)
+        document.querySelectorAll('.n1ct-langbadge').forEach(b => b.remove());
+        lastDetectedLang = null;
+        lastBadgeEl = null;
+    }
+
+    // ★ 규칙: 감지된 언어가 "직전과 다를 때" 표시한다.
+    //   추가로, 언어가 같더라도 "직전에 그 언어를 표시했던 메시지가 채팅에서 이미 사라졌다면" 다시 표시한다.
+    //   narrow.one 채팅은 일정 시간 뒤 메시지가 통째로 DOM에서 제거되므로,
+    //   그 메시지가 사라졌다는 건 = 화면에 "이게 무슨 언어인지" 알려주는 유일한 단서가 없어졌다는 뜻이다.
+    //   이걸 놓치면, 같은 언어가 계속 올라올 때 정작 화면엔 배지가 하나도 안 보이는 상태가 될 수 있다.
+    function markLangIfChanged(el, detected) {
+        if (!cfg.showLangChange) return;
+        const d = baseCode(detected);
+        if (!d || d === 'auto') return;
+
+        const sameLang = (d === lastDetectedLang);
+        const evidenceStillVisible = lastBadgeEl && lastBadgeEl.isConnected;
+        if (sameLang && evidenceStillVisible) return;   // 안 바뀌었고 + 이전 배지가 아직 화면에 있음 → 생략
+
+        lastDetectedLang = d;
+
+        const parent = el.parentElement;       // .chat-message-content (textContent 교체에 안 지워지도록 부모에 부착)
+        if (!parent) return;
+        let badge = parent.querySelector('.n1ct-langbadge');
+        if (!badge) {
+            badge = document.createElement('span');
+            badge.className = 'n1ct-langbadge';
+            parent.appendChild(badge);
+        }
+        badge.textContent = '(' + langName(detected) + ')';
+        badge.title = 'detected language: ' + langName(detected);
+        lastBadgeEl = parent;   // 이 메시지가 사라지는 순간을 다음 판단 때 감지하기 위해 기억해둠
     }
 
     async function translateLine(el, target) {
+        const isName = el.matches(SEL_NAME);
         const src = (el.textContent || '').trim();
         if (!src) return;
-        origMap.set(el, el.textContent);     // 요청 전에 먼저 표시 (중복 요청 방지)
+        origMap.set(el, el.textContent);        // 요청 전에 먼저 표시 (중복 요청 방지)
         const { text, detected } = await translateText(src, target);
-        if (!el.isConnected) return;         // 번역 도중 메시지가 사라졌으면 중단
-        if (baseCode(detected) === baseCode(target) || text === src) return;
+        if (!el.isConnected) return;            // 번역 도중 메시지가 사라졌으면 중단
+        if (baseCode(detected) === baseCode(target) || text === src) { origMap.delete(el); return; }
         el.textContent = text;
         el.title = src + '  (' + langName(detected) + ')';
+        if (!isName) markLangIfChanged(el, detected);   // 언어 배지는 본문에만
     }
 
     async function translateChatLog() {
         if (busy) return;
-        const all = chatLines();
+        const lines = chatLines();
+        const names = cfg.translateNames ? chatNames() : [];
+        const all = [...lines, ...names];
         if (!all.length) { showIndicator('No messages on screen', true); return; }
         const pending = all.filter(el => !origMap.has(el));
         if (!pending.length) { restoreAll(); return; }   // 다시 누르면 원문 복원
@@ -690,18 +773,20 @@ body.n1ct-fallback ${SEL_INPUT} {
         }
     }
 
-    // 새 메시지 자동 번역 (채팅이 몇 초 만에 사라지므로 사실상 필수)
+    // 새 메시지 자동 번역 — 원본의 채팅 로그 옵저버 (좁은 범위, 원래 오류 없던 코드)
     const chatObserver = new MutationObserver((muts) => {
         if (!cfg.autoTranslate) return;
         for (const m of muts) {
             for (const node of m.addedNodes) {
                 if (node.nodeType !== 1) continue;
-                const lines = [];
-                if (node.matches && node.matches(SEL_LINE)) lines.push(node);
-                if (node.querySelectorAll) {
-                    Array.prototype.push.apply(lines, node.querySelectorAll(SEL_LINE));
+                const els = [];
+                if (node.matches && node.matches(SEL_LINE)) els.push(node);
+                if (node.querySelectorAll) Array.prototype.push.apply(els, node.querySelectorAll(SEL_LINE));
+                if (cfg.translateNames) {
+                    if (node.matches && node.matches(SEL_NAME)) els.push(node);
+                    if (node.querySelectorAll) Array.prototype.push.apply(els, node.querySelectorAll(SEL_NAME));
                 }
-                for (const el of lines) {
+                for (const el of els) {
                     if (origMap.has(el)) continue;
                     translateLine(el, cfg.myLang).catch(e => { origMap.delete(el); console.warn(TAG, e); });
                 }
@@ -719,7 +804,7 @@ body.n1ct-fallback ${SEL_INPUT} {
     setInterval(watchChat, 1000);
 
     /* ============================================================
-     * 8. 입력 중인 내용 번역 ( '\' 키, 입력창에 포커스가 있을 때 )
+     * 8. 입력 중인 내용 번역  ( '\' 키, 입력창에 포커스가 있을 때 )
      * ============================================================ */
     const chatInput = () => document.querySelector(SEL_INPUT) || document.querySelector('.chat-input');
 
@@ -737,8 +822,7 @@ body.n1ct-fallback ${SEL_INPUT} {
         if (busy) return;
         const input = chatInput();
         if (!input) return;
-        // 혹시 트리거 키('\')가 입력창에 들어갔다면 제거한 뒤 번역 (확실하게)
-        let src = (input.value || '').replace(/\\+$/, '').trim();
+        let src = (input.value || '').replace(/\\+$/, '').trim();   // 트리거 키 '\' 제거 후 번역
         if (!src) return;
         busy = true;
         showIndicator('Translating');
@@ -753,9 +837,10 @@ body.n1ct-fallback ${SEL_INPUT} {
     }
 
     /* ============================================================
-     * 9. 설정 창 ( '_' )
+     * 9. 설정 창  ( '_' )  — 원본 디자인 + 친구 구성요소(엔진/Esc/T 제외)
      * ============================================================ */
-    let menu = null;
+    let menu = null, curtain = null;
+    const rndSeed = () => Math.floor(Math.random() * 99999) + 1;
 
     function buildLangField(fieldEl, which) {
         const search = fieldEl.querySelector('.n1ct-search');
@@ -799,28 +884,21 @@ body.n1ct-fallback ${SEL_INPUT} {
         });
     }
 
-    let curtain = null;
-
-    // wrinkledPaper 워클릿이 요소마다 seed를 요구하므로 랜덤 seed 부여
-    const rndSeed = () => Math.floor(Math.random() * 99999) + 1;
-
     function createMenu() {
         if (menu) return menu;
 
-        // 뒷배경 커튼 (게임 .dialogCurtain 재사용 → 클릭 시 닫힘)
         curtain = document.createElement('div');
         curtain.id = 'n1ct-curtain';
         curtain.className = 'dialogCurtain fullScreen n1ct-hidden';
         curtain.addEventListener('click', () => closeMenu());
         document.body.appendChild(curtain);
 
-        // 패널 본체 (게임 .dialog.wrinkledPaper 재사용 → 종이 질감·테마 자동)
         menu = document.createElement('div');
         menu.id = 'n1ct-menu';
         menu.className = 'dialog wrinkledPaper n1ct-hidden';
         menu.style.setProperty('--wrinkled-paper-seed', rndSeed());
         menu.innerHTML = `
-      <h2 class="dialogTitle blueNight">Chat Translation</h2>
+      <h2 class="dialogTitle blueNight">Chat Translation <span style="font-size:14px;opacity:.5">v${VERSION}</span></h2>
 
       <h3 class="settings-group-header">My language</h3>
       <div class="n1ct-field" data-which="myLang">
@@ -839,6 +917,8 @@ body.n1ct-fallback ${SEL_INPUT} {
       <h3 class="settings-group-header">Options</h3>
       <div class="n1ct-toggle"><span class="settings-item-text">Adaptive text color</span><input type="checkbox" id="n1ct-adaptive"></div>
       <div class="n1ct-toggle"><span class="settings-item-text">Auto-translate new messages</span><input type="checkbox" id="n1ct-auto"></div>
+      <div class="n1ct-toggle"><span class="settings-item-text">Translate player names</span><input type="checkbox" id="n1ct-names"></div>
+      <div class="n1ct-toggle"><span class="settings-item-text">Show language when it changes</span><input type="checkbox" id="n1ct-langchange"></div>
 
       <h3 class="settings-group-header">Shortcuts</h3>
       <div class="n1ct-keys">
@@ -854,7 +934,6 @@ body.n1ct-fallback ${SEL_INPUT} {
     `;
         document.body.appendChild(menu);
 
-        // 닫기 버튼에도 종이 seed 부여
         const closeBtn = menu.querySelector('#n1ct-close');
         closeBtn.style.setProperty('--wrinkled-paper-seed', rndSeed());
         closeBtn.addEventListener('click', () => closeMenu());
@@ -876,46 +955,45 @@ body.n1ct-fallback ${SEL_INPUT} {
         autoBox.checked = cfg.autoTranslate;
         autoBox.addEventListener('change', () => { cfg.autoTranslate = autoBox.checked; saveCfg(); });
 
+        const namesBox = menu.querySelector('#n1ct-names');
+        namesBox.checked = cfg.translateNames;
+        namesBox.addEventListener('change', () => { cfg.translateNames = namesBox.checked; saveCfg(); });
+
+        const langChangeBox = menu.querySelector('#n1ct-langchange');
+        langChangeBox.checked = cfg.showLangChange;
+        langChangeBox.addEventListener('change', () => {
+            cfg.showLangChange = langChangeBox.checked; saveCfg();
+            if (!cfg.showLangChange) {
+                document.querySelectorAll('.n1ct-langbadge').forEach(b => b.remove());
+            }
+        });
+
         return menu;
     }
 
     function openMenu() {
         const m = createMenu();
-        // 열 때마다 종이 seed를 새로 뽑아 게임처럼 매번 살짝 다른 질감
         m.style.setProperty('--wrinkled-paper-seed', rndSeed());
-        // reflow 후 hidden 제거해야 전환 애니메이션이 재생됨
-        void m.offsetWidth;
+        void m.offsetWidth;   // reflow 후 hidden 제거해야 전환 애니메이션 재생
         curtain.classList.remove('n1ct-hidden');
         m.classList.remove('n1ct-hidden');
     }
-
     function closeMenu() {
         if (!menu) return;
         menu.classList.add('n1ct-hidden');
         if (curtain) curtain.classList.add('n1ct-hidden');
         try { document.activeElement.blur(); } catch (e) { /* ignore */ }
     }
-
     function toggleMenu() {
         const m = createMenu();
-        const isOpen = !m.classList.contains('n1ct-hidden');
-        if (isOpen) closeMenu(); else openMenu();
+        m.classList.contains('n1ct-hidden') ? openMenu() : closeMenu();
     }
 
     /* ============================================================
-     * 9.5 왼쪽 메뉴에 "CHAT TRANSLATION" 버튼 삽입
-     *   구조: .main-menu-top-left > .menu-buttons-container
-     *          └ .main-menu-button-container (메뉴마다 1개)
-     *              ├ button.wrinkledPaper.main-menu-button > div.buttonImage
-     *              └ div.main-menu-button-text.whiteBigText.blueNight
-     *   Full Screen 컨테이너 바로 다음에 우리 컨테이너를 삽입한다.
-     *   게임이 입장 시 상위 UI를 통째로 숨기므로 우리 버튼도 자동으로 같이 사라진다.
+     * 9.5 왼쪽 메뉴에 "CHAT TRANSLATION" 버튼 삽입 (원본, 인터벌 방식)
      * ============================================================ */
-
     // 게임 톤에 맞는 흑백 아이콘 (말풍선 + 번역 화살표), 외부 파일 없이 data-URI로 삽입.
-    // 게임 기본 아이콘들은 "검은색" SVG이고, 다크 모드에서 게임이 색 반전을 걸어 흰색으로 보이게 함.
-    // 따라서 우리 아이콘도 검은색(#000)으로 만들어야 게임 아이콘과 똑같이 테마에 맞춰 색이 바뀜.
-    const MENU_ICON = "data:image/svg+xml;utf8," + encodeURIComponent(
+    const MENU_ICON = 'data:image/svg+xml;utf8,' + encodeURIComponent(
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none" ' +
         'stroke="#000000" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">' +
         '<path d="M14 20 h44 a8 8 0 0 1 8 8 v24 a8 8 0 0 1 -8 8 h-24 l-16 14 v-14 h-4 a8 8 0 0 1 -8 -8 v-24 a8 8 0 0 1 8 -8 z"/>' +
@@ -924,7 +1002,6 @@ body.n1ct-fallback ${SEL_INPUT} {
         '<path d="M66 74 h16 M74 70 v2 M78 74 q-4 8 -10 10 M70 74 q4 8 10 10"/>' +
         '</svg>'
     );
-
     const MENU_BTN_ID = 'n1ct-menu-btn';
 
     function findFullScreenContainer() {
@@ -938,11 +1015,11 @@ body.n1ct-fallback ${SEL_INPUT} {
     }
 
     function injectMenuButton() {
-        if (document.getElementById(MENU_BTN_ID)) return true;   // 이미 있음
+        if (document.getElementById(MENU_BTN_ID)) return true;
         const fsCont = findFullScreenContainer();
-        if (!fsCont || !fsCont.parentElement) return false;      // 메뉴 아직 안 뜸
+        if (!fsCont || !fsCont.parentElement) return false;
 
-        // Full Screen 컨테이너를 그대로 복제해서 아이콘/텍스트만 교체 → 게임과 100% 동일한 외형
+        // Full Screen 컨테이너를 복제해 아이콘/텍스트만 교체 → 게임과 동일한 외형
         const ours = fsCont.cloneNode(true);
         ours.id = MENU_BTN_ID;
         ours.style.setProperty('--n1ct-icon', 'url("' + MENU_ICON + '")');
@@ -950,14 +1027,12 @@ body.n1ct-fallback ${SEL_INPUT} {
         const btn = ours.querySelector('button.main-menu-button');
         if (btn) {
             btn.setAttribute('aria-label', 'Chat Translation');
-            // 복제하면서 딸려온 인라인 배경 이미지를 지워 우리 CSS(--n1ct-icon)가 적용되게 함
-            const img = btn.querySelector('.buttonImage');
+            const img = btn.querySelector('.buttonImage');   // 복제로 딸려온 인라인 배경 제거
             if (img) { img.style.backgroundImage = ''; img.style.backgroundSize = ''; }
         }
         const label = ours.querySelector('.main-menu-button-text');
         if (label) label.textContent = 'Chat Translation';
 
-        // 클릭 → 설정창 토글 (게임의 원래 클릭 핸들러는 복제 과정에서 붙어오지 않으므로 안전)
         ours.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -968,13 +1043,11 @@ body.n1ct-fallback ${SEL_INPUT} {
         console.log(TAG, 'menu button injected');
         return true;
     }
-
-    // 게임이 메뉴를 다시 그리면 우리 버튼이 사라질 수 있으니 주기적으로 재확인해 재삽입.
-    // (버튼 자체가 살아있으면 아무것도 안 하므로 부담 없음)
+    // 게임이 메뉴를 다시 그리면 버튼이 사라질 수 있으니 주기적으로 재확인 (버튼 있으면 즉시 종료)
     setInterval(injectMenuButton, 1000);
 
     /* ============================================================
-     * 10. 키 바인딩
+     * 10. 키 바인딩  (원본 그대로: \, -, _/shift+-, Esc는 패널 닫기만)
      * ============================================================ */
     function isTyping(el) {
         if (!el) return false;
@@ -984,7 +1057,7 @@ body.n1ct-fallback ${SEL_INPUT} {
     window.addEventListener('keydown', (e) => {
         const el = document.activeElement;
 
-        // 우리 패널이 열려 있을 때 ESC → 닫기 (게임 ESC 동작보다 먼저 가로챔)
+        // 패널이 열려 있을 때 ESC → 닫기 (게임 ESC보다 먼저 가로챔)
         if (e.key === 'Escape' && menu && !menu.classList.contains('n1ct-hidden')) {
             e.preventDefault(); e.stopPropagation(); closeMenu(); return;
         }
@@ -994,19 +1067,17 @@ body.n1ct-fallback ${SEL_INPUT} {
         const typing = isTyping(el);
         const inChat = typing && el.classList && el.classList.contains('chat-input');
 
-        // '\' : 통합 번역 키. 포커스 위치에 따라 자동 분기.
-        //   - 채팅 입력창에 포커스 O → 내가 쓰는 내용 → friend's language
-        //   - 포커스 X            → 올라온 채팅 → my language (다시 누르면 원문 복원)
+        // '\' : 통합 번역 키. 입력창 포커스면 내 문장 번역, 아니면 채팅 로그 번역(다시 누르면 복원)
         if (e.key === '\\') {
-            e.preventDefault(); e.stopPropagation();   // '\' 글자가 입력창에 안 찍히게 막음
+            e.preventDefault(); e.stopPropagation();
             if (inChat) translateInput();
             else if (!typing) translateChatLog();
             return;
         }
 
-        if (typing) return;                            // 아래 키들은 입력창 밖에서만
+        if (typing) return;   // 아래 키들은 입력창 밖에서만
 
-        // '_' (shift + '-') : 설정 창 (단축키 백업; 왼쪽 메뉴 버튼으로도 열림)
+        // '_' (shift + '-') : 설정 창
         if (e.key === '_' || (e.key === '-' && e.shiftKey)) {
             e.preventDefault(); e.stopPropagation(); toggleMenu(); return;
         }
@@ -1024,11 +1095,10 @@ body.n1ct-fallback ${SEL_INPUT} {
         ensureIndicator();
         positionIndicator();
         watchChat();
-        injectMenuButton();   // 메뉴가 이미 떠 있으면 즉시 삽입, 아니면 setInterval이 처리
-        console.log(TAG, 'ready | my=' + cfg.myLang + ' friend=' + cfg.friendLang + ' auto=' + cfg.autoTranslate);
+        injectMenuButton();
+        console.log(TAG, 'v' + VERSION, 'ready | my=' + cfg.myLang, 'friend=' + cfg.friendLang,
+            'auto=' + cfg.autoTranslate, 'names=' + cfg.translateNames, '| engines: google + microsoft (racing)');
     }
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
     else boot();
 })();
-
-
