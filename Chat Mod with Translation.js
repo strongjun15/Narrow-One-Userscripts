@@ -5,6 +5,7 @@
 // @description  Transparent chat styling, real-time contrast-aware text color, and chat/input translation. [-] translate chat log, [=] translate what you are typing, [_] or the CHAT TRANSLATION menu button to open settings.
 // @author       Lumos (extended)
 // @match        *://narrow.one/*
+// @icon         https://www.svgrepo.com/show/375775/chat.svg
 // @run-at       document-start
 // @grant        GM_xmlhttpRequest
 // @grant        unsafeWindow
